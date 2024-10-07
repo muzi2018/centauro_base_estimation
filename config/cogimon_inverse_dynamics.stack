@@ -1,0 +1,134 @@
+solver_options:
+    regularization: 1e-3
+    back_end: "qpoases"
+    
+stack:
+    - ["l_foot", "r_foot", "waist", "com","LeftWrench", "RightWrench", "postural"]
+
+
+constraints:
+    - "TorqueLimits"
+    - "RightFc"
+    - "LeftFc"
+    - "LeftCoP"
+    - "RightCoP"
+    - "r_foot_f_lims"
+    - "l_foot_f_lims"
+
+TorqueLimits:
+    lib_name: libcartesio_acceleration_support.so
+    type: "TorqueLimits"
+    contacts: ["l_sole", "r_sole"]
+
+LeftCoP:
+    lib_name: libcartesio_acceleration_support.so
+    type: "CoP"
+    link: "l_sole"
+    x_limits: [-0.05, 0.1]
+    y_limits: [-0.05, 0.05]
+
+RightCoP:
+    lib_name: libcartesio_acceleration_support.so
+    type: "CoP"
+    link: "r_sole"
+    x_limits: [-0.05, 0.1]
+    y_limits: [-0.05, 0.05]
+
+RightWrench:
+    lib_name: libcartesio_acceleration_support.so
+    type: "Force"
+    link: "r_sole"
+    weight: 1e-3
+
+LeftWrench:
+    lib_name: libcartesio_acceleration_support.so
+    type: "Force"
+    link: "l_sole"
+    weight: 1e-3
+
+RightFc:
+    lib_name: libcartesio_acceleration_support.so
+    type: "FrictionCone"
+    link: "r_sole"
+    local: true
+
+LeftFc:
+    lib_name: libcartesio_acceleration_support.so
+    type: "FrictionCone"
+    link: "l_sole"
+    local: true
+
+r_foot_f_lims:
+    lib_name: libcartesio_acceleration_support.so
+    type: "ForceLimits"
+    link: "r_sole"
+    name: "r_foot_f_lims"
+    min: [-10000, -10000, -10000, -10000, -10000, -10000]
+    max: [10000, 10000, 10000,  10000, 10000, 10000]
+
+l_foot_f_lims:
+    lib_name: libcartesio_acceleration_support.so
+    type: "ForceLimits"
+    link: "l_sole"
+    name: "l_foot_f_lims"
+    min: [-10000, -10000, -10000, -10000, -10000, -10000]
+    max: [10000, 10000, 10000,  10000, 10000, 10000]
+
+l_foot:
+    lib_name: libcartesio_acceleration_support.so
+    type: "Cartesian"
+    lambda: 0.0002
+    distal_link: "l_sole"
+    name: "l_foot"
+    weight: 100
+
+r_foot:
+    lib_name: libcartesio_acceleration_support.so
+    type: "Cartesian"
+    lambda: 0.0002
+    distal_link: "r_sole"
+    name: "r_foot"
+    weight: 100
+
+waist:
+    lib_name: libcartesio_acceleration_support.so
+    type: "Cartesian"
+    lambda: 0.0002
+    distal_link: "Waist"
+    indices: [3,4,5]
+
+com:
+    lib_name: libcartesio_acceleration_support.so
+    type: "Com"
+    lambda: 0.0004
+    weight: 10
+
+postural:
+    lib_name: libcartesio_acceleration_support.so
+    type: "Postural"
+    lambda: 0.001
+    #lambda2: 0.0001
+    weight:
+      VIRTUALJOINT_1: 0
+      VIRTUALJOINT_2: 0
+      VIRTUALJOINT_3: 0
+      VIRTUALJOINT_4: 0
+      VIRTUALJOINT_5: 0
+      VIRTUALJOINT_6: 0
+      RHipLat: 0
+      RHipSag: 0
+      RHipYaw: 0
+      RKneePitch: 0
+      RAnklePitch: 0
+      RAnkleRoll: 0
+      LHipLat: 0
+      LHipSag: 0
+      LHipYaw: 0
+      LKneePitch: 0
+      LAnklePitch: 0
+      LAnkleRoll: 0
+      
+
+
+
+
