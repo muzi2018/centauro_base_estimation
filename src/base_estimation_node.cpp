@@ -1,25 +1,25 @@
 #include <ros/ros.h>
 #include <tf2_msgs/TFMessage.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include <tf/transform_listener.h>
+#include <tf_conversions/tf_eigen.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <tf/transform_datatypes.h>
+#include <nav_msgs/Odometry.h>
 
 #include <RobotInterfaceROS/ConfigFromParam.h>
 #include <XBotInterface/RobotInterface.h>
 #include <matlogger2/matlogger2.h>
 #include <xbot2/journal/journal.h>
+#include <cartesian_interface/utils/RobotStatePublisher.h>
 
 #include <base_estimation/base_estimation.h>
 #include <base_estimation/ContactsStatus.h>
-#include <base_estimation/ContactsWrench.h>
 #include <base_estimation/contact_viz.h>
-#include <std_msgs/Bool.h>
-
+#include <base_estimation/ContactWrenches.h>
 #include "common.h"
-
-#include <base_estimation/contact_estimation.h>
 
 using namespace std::string_literals;
 
@@ -38,36 +38,47 @@ public:
     bool run();
 
 private:
+
+    void wrench_callback(base_estimation::ContactWrenchesConstPtr msg);
+
+    ros::NodeHandle _nh;
     ros::NodeHandle _nhpr;
 
     XBot::RobotInterface::Ptr _robot;
     XBot::ModelInterface::Ptr _model;
     ikbe::BaseEstimation::UniquePtr _est;
 
+    std::map<std::string, XBot::ForceTorqueSensor::Ptr> _ft_map;
+
+    std::unique_ptr<XBot::Cartesian::Utils::RobotStatePublisher> _rspub;
+
     std::string _odom_frame;
+    std::string _tf_prefix;
+    double _pose_lin_cov, _pose_rot_cov;
+    double _vel_lin_cov, _vel_rot_cov;
 
     ros::Publisher _base_tf_pub;
+    ros::Publisher _base_transform_pub;
     ros::Publisher _base_pose_pub;
     ros::Publisher _base_twist_pub;
+    ros::Publisher _base_odom_pub;
     ros::Publisher _base_raw_twist_pub;
     ros::Publisher _contacts_state_pub;
-    ros::Publisher _haptic_contacts_state_pub;
-    ros::Publisher _wrenches_pub;
+    ros::Publisher _force_pub;
+
+    ros::Subscriber _forces_sub;
+
+    ros::Time _last_now;
 
     void publishToROS(const Eigen::Affine3d& T,
                       const Eigen::Vector6d& v,
-                      const Eigen::Vector6d& raw_v,
-                      const std::vector<bool>& contact_flags,
-                      const std::vector<bool>& haptic_contact_flags,
-                      const std::vector<Eigen::Vector6d>& contact_wrenches);
-
-    bool _publish_tftopic;
-    int _contacts_number;   // the total number of contacts
+                      const Eigen::Vector6d& raw_v);
 
 };
 
 BaseEstimationNode::BaseEstimationNode():
-    XBot::Journal(XBot::Journal::no_publish, "base_estimation_node"),
+    XBot::Journal(XBot::Journal::no_publish,
+                  "base_estimation_node"),
     _nhpr("~")
 {
     // get config options
@@ -87,6 +98,17 @@ BaseEstimationNode::BaseEstimationNode():
     _robot->sense(false);
     _model->syncFrom(*_robot);
 
+    // rspub
+    if(_nhpr.param<bool>("publish_tf", false))
+    {
+        _rspub = std::make_unique<XBot::Cartesian::Utils::RobotStatePublisher>(_model);
+    }
+
+    if(!_nhpr.getParam("tf_prefix", _tf_prefix))
+    {
+        _tf_prefix = "odometry";
+    }
+
     // load problem
     std::string ik_problem_str;
     if(!_nhpr.getParam("ik_problem", ik_problem_str))
@@ -102,19 +124,11 @@ BaseEstimationNode::BaseEstimationNode():
     est_opt.log_enabled = _nhpr.param("enable_log", false);
     est_opt.contact_attach_thr = _nhpr.param("contact_attach_thr", 40.0);
     est_opt.contact_release_thr = _nhpr.param("contact_release_thr", 10.0);
-    est_opt.estimate_contacts = _nhpr.param("estimate_contacts", false);
-
-    // publish or not to /tf topic
-    _publish_tftopic = _nhpr.param("publish_tftopic", false);
 
     // create estimator
-    if (est_opt.estimate_contacts) {
-        std::cout << "Contacts to be estimated." << std::endl;
-    }
-    else {
-        std::cout << "Contacts are preplanned." << std::endl;
-    }
-    _est = std::make_unique<ikbe::BaseEstimation>(_model, ik_problem_yaml, _nhpr, est_opt);
+    _est = std::make_unique<ikbe::BaseEstimation>(_model,
+                                                  ik_problem_yaml,
+                                                  est_opt);
 
     // use imu
     if(_nhpr.param("use_imu", false))
@@ -132,52 +146,66 @@ BaseEstimationNode::BaseEstimationNode():
     }
 
     // set world frame coincident to given link
-    std::string world_frame_link = _nhpr.param("world_frame_link", ""s);
-    std::cout << "World frame link: " << world_frame_link << std::endl;
-    if(world_frame_link == "")
+    std::string world_from_tf = _nhpr.param("world_from_tf", ""s);
+    if(world_from_tf != "")
     {
-        // initialize base pose
-        const std::string basePoseTopic = "/xbotcore/link_state/pelvis/pose";
-        boost::shared_ptr<geometry_msgs::PoseStamped const> msgBasePosePtr;             // ros messages
-        msgBasePosePtr = ros::topic::waitForMessage<geometry_msgs::PoseStamped>(basePoseTopic, _nhpr, ros::Duration(3));
+        tf::TransformListener tl;
 
-        if (msgBasePosePtr != NULL) {
-            // check if xbotcore pose msg is available (simulation) then use this as ground truth
-            Eigen::Affine3d fb_T_l;
-            tf::poseMsgToEigen(msgBasePosePtr->pose, fb_T_l);
-            _model->setFloatingBasePose(fb_T_l);
-            jinfo("Initialized base pose from xbotcore topic");
+        std::string floating_base_link;
+        _model->getFloatingBaseLink(floating_base_link);
+
+        std::string err;
+        if(!tl.waitForTransform(world_from_tf,
+                                floating_base_link,
+                                ros::Time(0), ros::Duration(5.0), ros::Duration(0.01), &err))
+        {
+            ROS_ERROR("tf lookup failed: %s", err.c_str());
+            exit(1);
         }
-        else {                                                  // otherwise initialize with a default value
-            // get fb pose and modify z translation based on tf from contact frame
-            std::string base_link;
-            Eigen::Affine3d fb_T_l, T_c1fb;
-            std::map<std::string, std::string> surface_contacts;
-            _nhpr.getParam("surface_contacts", surface_contacts);   // contact frame from param server
-            _model->getFloatingBaseLink(base_link);
-            _model->getFloatingBasePose(fb_T_l);
-            _model->getPose(base_link, surface_contacts.begin()->second, T_c1fb);
-            fb_T_l.translation() = Eigen::Vector3d(0, 0, T_c1fb.translation()(2, 0));
-            _model->setFloatingBasePose(fb_T_l);
-            jinfo("Did not get floating base pose from xbotcore ground truth. Initialized base pose from default values");
-        }
-    } else if(world_frame_link != "") {
-        // previous implementation
+
+        tf::StampedTransform tf;
+        tl.lookupTransform(world_from_tf,
+                           floating_base_link,
+                           ros::Time(0),
+                           tf);
+
+
+        Eigen::Affine3d fb_T_l;
+        tf::transformTFToEigen(tf, fb_T_l);
+
+        _model->setFloatingBasePose(fb_T_l);
+        _model->update();
+    }
+
+    // set world frame from given tf
+    std::string world_frame_link = _nhpr.param("world_frame_link", ""s);
+    if(world_frame_link != "")
+    {
         Eigen::Affine3d fb_T_l;
         std::string floating_base_link;
         _model->getFloatingBaseLink(floating_base_link);
         if(!_model->getPose(world_frame_link, floating_base_link, fb_T_l))
         {
-          throw std::runtime_error("world frame link '" + world_frame_link + "' is undefined");
+            throw std::runtime_error("world frame link '" + world_frame_link + "' is undefined");
         }
+
         jinfo("using link '{}' as world frame", world_frame_link);
+
         _model->setFloatingBasePose(fb_T_l.inverse());
+        _model->update();
     }
-    _model->update();
 
     // get contact properties
-    std::map<std::string, std::string> rolling_contacts;            // rolling contacts (ft name -> wheel name map)
+
+    // rolling contacts (ft name -> wheel name map)
+    std::map<std::string, std::string> rolling_contacts;
+
+    // get it from parameters
     _nhpr.getParam("rolling_contacts", rolling_contacts);
+
+    // z force override
+    std::map<std::string, double> z_force_override;
+    _nhpr.getParam("z_force_override", z_force_override);
 
     for(auto rc : rolling_contacts)
     {
@@ -191,73 +219,107 @@ BaseEstimationNode::BaseEstimationNode():
         XBot::ForceTorqueSensor::ConstPtr ft;
 
         // add ft (either real or virtual)
-        if(ft_map.count(ft_name) > 0)
+        if(z_force_override.count(ft_name))
+        {
+            auto dummy_ft = ikbe::BaseEstimation::CreateDummyFtSensor(ft_name);
+            dummy_ft->setForce(z_force_override.at(ft_name) * Eigen::Vector3d::UnitZ(),
+                               0.0);  // useless timestamp
+            jinfo("created dummy ft {} for wheel {}, fz = {}",
+                  ft_name, wh_name, z_force_override.at(ft_name));
+            ft = dummy_ft;
+        }
+        else if(ft_map.count(ft_name) > 0)
+        {
             ft = ft_map.at(ft_name);
+        }
         else
+        {
             ft = _est->createVirtualFt(ft_name, {0, 1, 2});
+        }
 
         // create contact
         _est->addRollingContact(wh_name, ft);
 
-        jinfo("adding rolling contact (ft: '{}', wheel: '{}')", ft_name, wh_name);
+        jinfo("adding rolling contact (ft: '{}', wheel: '{}')",
+              ft_name,
+              wh_name);
     }
 
     // surface contacts (including point contacts)
-    std::map<std::string, std::string> surface_contacts, arm_surface_contacts;
-    _nhpr.getParam("surface_contacts", surface_contacts);                              // first get feet
-    _nhpr.getParam("arm_surface_contacts", arm_surface_contacts);                         // then arms
+    std::map<std::string, std::string> surface_contacts;
 
-    std::vector<std::map<std::string, std::string>> mapsVector = {surface_contacts, arm_surface_contacts};
+    // get it from parameters
+    _nhpr.getParam("surface_contacts", surface_contacts);
 
-    for (auto contact_species : mapsVector) {
-        for(auto sc : contact_species)
+    for(auto sc : surface_contacts)
+    {
+        // save force-torque name
+        auto ft_name = sc.first;
+        auto vertex_prefix = sc.second;
+
+        // retrieve foot corner frames based on
+        // the given prefix
+        auto vertices = ikbe_common::footFrames(*_est->ci(),
+                                                vertex_prefix);
+
+        // map of available ft sensors
+        auto ft_map = _robot->getForceTorque();
+
+        // ft for contact detection
+        XBot::ForceTorqueSensor::ConstPtr ft;
+
+        // add ft (either real or virtual)
+        if(ft_map.count(ft_name) > 0)
         {
-            // save force-torque name
-            auto ft_name = sc.first;
-            auto vertex_prefix = sc.second;
-
-            // retrieve foot corner frames based on
-            // the given prefix
-            auto vertices = ikbe_common::footFrames(*_est->ci(),
-                                                    vertex_prefix);
-
-            // map of available ft sensors
-            auto ft_map = _robot->getForceTorque();
-
-            // ft for contact detection
-            XBot::ForceTorqueSensor::ConstPtr ft;
-
-            // add ft (either real or virtual)
-            if(ft_map.count(ft_name) > 0)
-                ft = ft_map.at(ft_name);
-            else
-                ft = _est->createVirtualFt(ft_name, {0, 1, 2});
-
-            // create contact
-            if (!vertices.empty())
-                _est->addSurfaceContact(vertices, ft);
-
-            jinfo("adding surface contact '{}' with vertices: [{}]",
-                    ft_name,
-                    fmt::join(vertices, ", "));
+            ft = ft_map.at(ft_name);
         }
+        else
+        {
+            ft = _est->createVirtualFt(ft_name, {0, 1, 2});
+        }
+
+        // create contact
+        _est->addSurfaceContact(vertices, ft);
+
+        jinfo("adding surface contact '{}' with vertices: [{}]",
+              ft_name,
+              fmt::join(vertices, ", "));
     }
 
-    // set number of total contact
-    _contacts_number = rolling_contacts.size() + surface_contacts.size() + arm_surface_contacts.size();
+    std::vector<std::string> point_contacts;
+    _nhpr.getParam("point_contacts", point_contacts);
+
+    for (auto pc : point_contacts)
+    {
+        auto ft = _est->CreateDummyFtSensor(pc);
+        _ft_map[pc] = ft;
+
+        _est->addSurfaceContact({pc}, ft);
+
+        jinfo("adding point contact '{}'",
+              pc);
+    }
 
     // publishers
-    if (_publish_tftopic)
-        _base_tf_pub = _nhpr.advertise<tf2_msgs::TFMessage>("/tf", 1);
-    _base_pose_pub = _nhpr.advertise<geometry_msgs::TransformStamped>("base_link/pose", 1);
+    _base_tf_pub = _nhpr.advertise<tf2_msgs::TFMessage>("/tf", 1);
+    _base_transform_pub = _nhpr.advertise<geometry_msgs::TransformStamped>("base_link/transform", 1);
+    _base_pose_pub = _nhpr.advertise<geometry_msgs::PoseStamped>("base_link/pose", 1);
     _base_twist_pub = _nhpr.advertise<geometry_msgs::TwistStamped>("base_link/twist", 1);
     _base_raw_twist_pub = _nhpr.advertise<geometry_msgs::TwistStamped>("base_link/raw_twist", 1);
     _contacts_state_pub = _nhpr.advertise<base_estimation::ContactsStatus>("contacts/status", 1);
-    _wrenches_pub = _nhpr.advertise<base_estimation::ContactsWrench>("contacts/wrench", 1);
-    _haptic_contacts_state_pub = _nhpr.advertise<base_estimation::ContactsStatus>("contacts/haptic_status", 1);
+    _base_odom_pub = _nhpr.advertise<nav_msgs::Odometry>("base_link/odom", 1);
+    _force_pub = _nhpr.advertise<base_estimation::ContactWrenches>("contacts/get_wrench", 1);
+
+    _forces_sub = _nhpr.subscribe("contacts/set_wrench", 1, &BaseEstimationNode::wrench_callback, this);
 
     // odom frame name
-    _odom_frame = _nhpr.param("odom_frame", "odometry/world"s);
+    _odom_frame = _nhpr.param("odom_frame", "world"s);
+
+    // covariance
+    _pose_lin_cov = _nhpr.param("pose_lin_cov", 1.0);
+    _pose_rot_cov = _nhpr.param("pose_rot_cov", 1.0);
+    _vel_lin_cov = _nhpr.param("vel_lin_cov", 1.0);
+    _vel_rot_cov = _nhpr.param("vel_rot_cov", 1.0);
 
     // filter params
     double filter_param = 0.;
@@ -297,7 +359,7 @@ void BaseEstimationNode::start()
 bool BaseEstimationNode::run()
 {
     // update robot
-    _robot->sense(true);
+    _robot->sense(false);
     _model->syncFrom(*_robot);
 
     // update estimate
@@ -311,82 +373,126 @@ bool BaseEstimationNode::run()
 
     // publish contact markers in ROS
     // tbd publishVertexWeights();
-
-    // contact status and contact wrenches
-    std::vector<Eigen::Vector6d> wrenches(_contacts_number);
-    std::vector<bool> contacts(_contacts_number);
-    std::vector<bool> haptic_contacts(_contacts_number);
-    for (int i = 0; i < contacts.size(); i++) {
-        contacts[i] = _est->contact_info[i].contact_state;
-        haptic_contacts[i] = _est->contact_info[i].contact_haptic_state;
-        wrenches[i] = _est->contact_info[i].wrench;
-    }
+    // tbd publishContactStatus();
 
     // base state broadcast in ROS
-    publishToROS(base_pose, base_vel, raw_base_vel, contacts, haptic_contacts, wrenches);
+    publishToROS(base_pose, base_vel, raw_base_vel);
 
     return true;
 }
 
-void BaseEstimationNode::publishToROS(const Eigen::Affine3d& T, const Eigen::Vector6d& v, const Eigen::Vector6d& raw_v,
-                                      const std::vector<bool>& contact_flags,
-                                      const std::vector<bool>& haptic_contact_flags,
-                                      const std::vector<Eigen::Vector6d>& contact_wrenches)
+void BaseEstimationNode::publishToROS(const Eigen::Affine3d& T,
+                                      const Eigen::Vector6d& v,
+                                      const Eigen::Vector6d& raw_v)
 {
+    // protect against duplicated tf warning
+    auto now = ros::Time::now();
+
+    if(now == _last_now)
+    {
+        return;
+    }
+
+    _last_now = now;
+
     // publish tf
+    if(_rspub)
+    {
+        _rspub->publishTransforms(now, _tf_prefix);
+    }
+
+    // publish transform
     geometry_msgs::TransformStamped tf = tf2::eigenToTransform(T);
     std::string base_link;
     _model->getFloatingBaseLink(base_link);
+    tf.child_frame_id = _tf_prefix + "/" + base_link;
+    tf.header.frame_id = _tf_prefix + "/world";
+    tf.header.stamp = now;
+    _base_transform_pub.publish(tf);
+
+    geometry_msgs::PoseStamped pose;
+    pose.header.frame_id = _tf_prefix + "world";
+    pose.header.stamp = now;
+    tf::poseEigenToMsg(T, pose.pose);
+    _base_pose_pub.publish(pose);
+
+    // publish local twist
+    Eigen::Vector6d v_local;
+    v_local << T.linear().transpose()*v.head<3>(),
+               T.linear().transpose()*v.tail<3>();
+
+    geometry_msgs::TwistStamped twist_msg;
+    twist_msg.header.stamp = now;
+    twist_msg.header.frame_id = _tf_prefix + "/" + base_link;
+
+    tf::twistEigenToMsg(v_local, twist_msg.twist);
+    _base_twist_pub.publish(twist_msg);
+
+    // publish local raw twist
+    Eigen::Vector6d raw_v_local;
+    raw_v_local << T.linear().transpose()*raw_v.head<3>(),
+                   T.linear().transpose()*raw_v.tail<3>();
+
+    geometry_msgs::TwistStamped raw_twist_msg;
+    raw_twist_msg.header.stamp = now;
+    raw_twist_msg.header.frame_id = _tf_prefix + "/" + base_link;
+
+    tf::twistEigenToMsg(raw_v_local, raw_twist_msg.twist);
+    _base_raw_twist_pub.publish(raw_twist_msg);
+
+    // publish odom
+    nav_msgs::Odometry odom_msg;
+    odom_msg.header = tf.header;
+    odom_msg.child_frame_id = tf.child_frame_id;
+    tf::poseEigenToMsg(T, odom_msg.pose.pose);
+    odom_msg.twist.twist = twist_msg.twist;
+
+    // set covariance
+    auto pose_cov = Eigen::Matrix6d::Map(odom_msg.pose.covariance.data());
+    pose_cov.diagonal().head<3>().setConstant(_pose_lin_cov);
+    pose_cov.diagonal().tail<3>().setConstant(_pose_rot_cov);
+
+    auto vel_cov = Eigen::Matrix6d::Map(odom_msg.twist.covariance.data());
+    vel_cov.diagonal().head<3>().setConstant(_vel_lin_cov);
+    vel_cov.diagonal().tail<3>().setConstant(_vel_rot_cov);
+
+    _base_odom_pub.publish(odom_msg);
+
+    // publish odom frame
     tf.child_frame_id = base_link;
-    tf.header.frame_id = "odometry/world";
-    tf.header.stamp = ros::Time::now();
-
-    if (_publish_tftopic) {
-        tf2_msgs::TFMessage msg;
-        msg.transforms.push_back(tf);
-        _base_tf_pub.publish(msg);
-    }
-
-    // publish geomsg
+    tf.header.frame_id = "odom";
     _base_pose_pub.publish(tf);
 
-    geometry_msgs::TwistStamped Vmsg;
-    Vmsg.header = tf.header;
-    tf::twistEigenToMsg(v, Vmsg.twist);
-    _base_twist_pub.publish(Vmsg);
+    tf2_msgs::TFMessage tfmsg;
+    tfmsg.transforms.push_back(tf);
+    _base_tf_pub.publish(tfmsg);
 
-    tf::twistEigenToMsg(raw_v, Vmsg.twist);
-    _base_raw_twist_pub.publish(Vmsg);
-
-    // publish contact status
-    base_estimation::ContactsStatus contactsMsg;
-    base_estimation::ContactsStatus hapticContactsMsg;
-    base_estimation::ContactStatus singleContactMsg;
-    for (int i = 0; i < contact_flags.size(); i++) {            // fill message
-        singleContactMsg.status = contact_flags[i];
-        singleContactMsg.header = tf.header;
-        contactsMsg.contacts_status.emplace_back(singleContactMsg);
-
-        // hapic contact msg
-        singleContactMsg.status = haptic_contact_flags[i];
-        hapticContactsMsg.contacts_status.emplace_back(singleContactMsg);
+    base_estimation::ContactWrenches wrench_msg;
+    wrench_msg.header.stamp = now;
+    for (auto cinfo : _est->contact_info)
+    {
+        wrench_msg.names.push_back(cinfo.name);
+        geometry_msgs::Wrench wrench;
+        tf::vectorEigenToMsg(cinfo.wrench.head(3), wrench.force);
+        tf::vectorEigenToMsg(cinfo.wrench.tail(3), wrench.torque);
+        wrench_msg.wrenches.push_back(wrench);
     }
-    _contacts_state_pub.publish(contactsMsg);
-    _haptic_contacts_state_pub.publish(hapticContactsMsg);   // publish contact haptic status
+    _force_pub.publish(wrench_msg);
+}
 
-    // publish contact wrench
-    geometry_msgs::WrenchStamped singleWrenchMsg;
-    base_estimation::ContactsWrench wrenchMsg;
-    for (int i = 0; i < contact_wrenches.size(); i++) {            // fill message
-        tf::wrenchEigenToMsg(contact_wrenches[i], singleWrenchMsg.wrench);
-        singleWrenchMsg.header = tf.header;
-        singleWrenchMsg.header.frame_id = _est->getEstimatedWrenchReferenceFrames()[i];
-        wrenchMsg.contacts_wrench.emplace_back(singleWrenchMsg);
-        auto forceNorm = sqrt(singleWrenchMsg.wrench.force.x*singleWrenchMsg.wrench.force.x + singleWrenchMsg.wrench.force.y*singleWrenchMsg.wrench.force.y +
-                              singleWrenchMsg.wrench.force.z*singleWrenchMsg.wrench.force.z);
-        wrenchMsg.force_norm.emplace_back(forceNorm);
+void BaseEstimationNode::wrench_callback(base_estimation::ContactWrenchesConstPtr msg)
+{
+    for (int i = 0; i < msg->names.size(); i++)
+    {
+        Eigen::Vector3d force, torque;
+        tf::vectorMsgToEigen(msg->wrenches[i].force, force);
+        tf::vectorMsgToEigen(msg->wrenches[i].torque, torque);
+
+        Eigen::Vector6d wrench;
+        wrench << force, torque;
+
+        _ft_map[msg->names[i]]->setWrench(wrench, msg->header.stamp.toSec());
     }
-    _wrenches_pub.publish(wrenchMsg);
 }
 
 int main(int argc, char **argv)
@@ -399,12 +505,13 @@ int main(int argc, char **argv)
     ros::Rate rate(node.getRate());
 
     node.start();
+
     while(ros::ok())
     {
         node.run();
-        ros::spinOnce();    // spin for the preplanned contacts subscriber
-        rate.sleep();
 
+        rate.sleep();
+        ros::spinOnce();
     }
 
 }

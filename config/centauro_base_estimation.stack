@@ -4,7 +4,7 @@ solver_options:
     front_end: ihqp
 
 stack:
-     - [LF, RF, LR, RR, LA, RA, IMU]
+     - [LF, RF, LR, RR, IMU]
 
 constraints: [Postural]
 
@@ -31,39 +31,29 @@ IMU:
     active: false
 
 LF:
-    type: Cartesian
-    distal_link: contact_1
-    lambda: *vertex_lam
-    indices: [0,1,2]
+    type: WheelRolling
+    wheel_name: wheel_1
+    lib_name: libcentauro_cartesio_addon.so
+    wheel_radius: 0.078
+    include_z_axis: true
 
 RF:
-    type: Cartesian
-    distal_link: contact_2
-    lambda: *vertex_lam
-    indices: [0,1,2]
+    type: WheelRolling
+    wheel_name: wheel_2
+    lib_name: libcentauro_cartesio_addon.so
+    wheel_radius: 0.078
+    include_z_axis: true
 
 LR:
-    type: Cartesian
-    distal_link: contact_3
-    lambda: *vertex_lam
-    indices: [0,1,2]
+    type: WheelRolling
+    wheel_name: wheel_3
+    lib_name: libcentauro_cartesio_addon.so
+    wheel_radius: 0.078
+    include_z_axis: true
 
 RR:
-    type: Cartesian
-    distal_link: contact_4
-    lambda: *vertex_lam
-    indices: [0,1,2]
-
-LA:
-    type: Cartesian
-    distal_link: arm1_8
-    lambda: *vertex_lam
-    indices: [0,1,2]
-    active: false
-
-RA:
-    type: Cartesian
-    distal_link: arm2_8
-    lambda: *vertex_lam
-    indices: [0,1,2]
-    active: false
+    type: WheelRolling
+    wheel_name: wheel_4
+    lib_name: libcentauro_cartesio_addon.so
+    wheel_radius: 0.078
+    include_z_axis: true
