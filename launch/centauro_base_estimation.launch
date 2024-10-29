@@ -1,11 +1,11 @@
 <launch>
+<arg name="gdb"                default="true"/>
+<arg name="launch-prefix"      default=""/>
+    <node pkg="base_estimation" type="base_estimation_node" name="centauro_base_estimation" output="screen" launch-prefix="$(arg launch-prefix)">
 
-<node pkg="base_estimation"
-        type="base_estimation_node"
-        name="centauro_base_estimation"
-        output="screen">
+     
 
-    <param name="ik_problem" textfile="$(find kyon_controller)/config/centauro_base_estimation.yaml"/>
+    <param name="ik_problem" textfile="$(find centauro_horizon)/config/centauro_base_estimation.yaml"/>
     <param name="rate" value="200.0"/>
     <param name="contact_attach_thr" value="100.0"/>
     <param name="contact_release_thr" value="50.0"/>

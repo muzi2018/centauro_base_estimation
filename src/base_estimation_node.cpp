@@ -97,7 +97,6 @@ BaseEstimationNode::BaseEstimationNode():
     // set model to the robot state
     _robot->sense(false);
     _model->syncFrom(*_robot);
-
     // rspub
     if(_nhpr.param<bool>("publish_tf", false))
     {
@@ -288,6 +287,7 @@ BaseEstimationNode::BaseEstimationNode():
 
     std::vector<std::string> point_contacts;
     _nhpr.getParam("point_contacts", point_contacts);
+    std::cout << "BaseEstimationNode 11---" << std::endl;
 
     for (auto pc : point_contacts)
     {
@@ -359,8 +359,10 @@ void BaseEstimationNode::start()
 bool BaseEstimationNode::run()
 {
     // update robot
-    _robot->sense(false);
+    _robot->sense(true);
     _model->syncFrom(*_robot);
+
+    // std::cout << "update robot" << std::endl;
 
     // update estimate
     Eigen::Affine3d base_pose;
@@ -400,6 +402,8 @@ void BaseEstimationNode::publishToROS(const Eigen::Affine3d& T,
     {
         _rspub->publishTransforms(now, _tf_prefix);
     }
+
+    // std::cout << "publish base_estimation to ROS" << std::endl;
 
     // publish transform
     geometry_msgs::TransformStamped tf = tf2::eigenToTransform(T);
