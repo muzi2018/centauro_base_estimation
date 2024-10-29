@@ -2,14 +2,14 @@
 
 <launch>
 
-    <arg name="gdb"                default="false"/>
+    <arg name="gdb"                default="true"/>
     <arg name="estimate_contacts"  default="false"/>
-    <arg name="publish_tftopic"    default="false"/>
+    <arg name="publish_tftopic"    default="true"/>
     <arg name="launch-prefix"      default=""/>
     <arg name="arm_contacts"       default="true"/>
 
     
-    <node pkg="base_estimation" type="base_estimation_node" name="centauro_base_estimation" output="screen" launch-prefix="$(arg launch-prefix)">
+    <node pkg="base_estimation" type="base_estimation_node" name="centauro_base_estimation" output="screen" launch-prefix="gnome-terminal -- gdb -e run --args">
         <param name="rate" value="200.0"/>
         <param name="ik_problem" textfile="$(find base_estimation)/config/centauro_base_estimation.stack"/>
         <param name="contact_attach_thr" value="170.0"/>
@@ -32,4 +32,6 @@
         <remap from="/robot_description" to="/xbotcore/robot_description"/>
         <remap from="/robot_description_semantic" to="/xbotcore/robot_description_semantic"/>
     </node>
+
+
 </launch>
