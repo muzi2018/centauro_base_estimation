@@ -62,14 +62,14 @@ bool ContactEstimation::getContactState() const
 ContactPreplanned::ContactPreplanned(ros::NodeHandle& nodeHandle, std::vector<std::string> vertices_name)
     : _nodehandle(nodeHandle), _current_mode(15), _contact_state(true), _previous_contact_state(true)
 {
-    _contact_index = vertices2ContactIndex(vertices_name);
-    _mpc_observation_sub = _nodehandle.subscribe("/legged_robot_mpc_observation", 1,
-                                                 &ContactPreplanned::mpcObservationCallback, this,
-                                                 ros::TransportHints().tcpNoDelay());
-    if (ikbe_common::isArm(vertices_name.front(), _nodehandle)) {
-        _contact_state = false;
-        _previous_contact_state = false;
-    }
+    // _contact_index = vertices2ContactIndex(vertices_name);
+    // _mpc_observation_sub = _nodehandle.subscribe("/legged_robot_mpc_observation", 1,
+    //                                              &ContactPreplanned::mpcObservationCallback, this,
+    //                                              ros::TransportHints().tcpNoDelay());
+    // if (ikbe_common::isArm(vertices_name.front(), _nodehandle)) {
+    //     _contact_state = false;
+    //     _previous_contact_state = false;
+    // }
 }
 
 /* *************************************************************************
@@ -104,13 +104,13 @@ int ContactPreplanned::vertices2ContactIndex(std::vector<std::string> vertices_n
 /* *************************************************************************
  * *************************************************************************
  * *************************************************************************/
-void ContactPreplanned::mpcObservationCallback(const ocs2_msgs::mpc_observationConstPtr& msg) {
-    _current_mode = msg->mode;
-//    update();
-    // check that within the callback even should not be returned. callback should just update the flags
-    auto contacts_state = ocs2::legged_robot::modeNumber2ActiveContacts(_current_mode);
-    _contact_state = contacts_state.at(_contact_index);
-}
+// void ContactPreplanned::mpcObservationCallback(const ocs2_msgs::mpc_observationConstPtr& msg) {
+//     _current_mode = msg->mode;
+// //    update();
+//     // check that within the callback even should not be returned. callback should just update the flags
+//     auto contacts_state = ocs2::legged_robot::modeNumber2ActiveContacts(_current_mode);
+//     _contact_state = contacts_state.at(_contact_index);
+// }
 
 
 /* *************************************************************************
