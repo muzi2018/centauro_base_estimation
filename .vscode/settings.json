@@ -24,5 +24,6 @@
         "/home/wang/forest_ws/install/lib/python2.7/dist-packages",
         "/home/wang/forest_ws/install/lib/python3.8/site-packages",
         "/opt/xbot/lib/python2.7/dist-packages"
-    ]
+    ],
+    "ros.distro": "noetic"
 }
