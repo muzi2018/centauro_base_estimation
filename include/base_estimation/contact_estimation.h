@@ -4,7 +4,7 @@
 #include <memory>
 #include <ros/ros.h>
 
-#include <ocs2_msgs/mpc_observation.h>
+// #include <ocs2_msgs/mpc_observation.h>
 
 namespace ikbe
 {
@@ -79,7 +79,7 @@ public:
     bool getContactState() const;
 
 private:
-    void mpcObservationCallback(const ocs2_msgs::mpc_observationConstPtr& msg);
+    // void mpcObservationCallback(const ocs2_msgs::mpc_observationConstPtr& msg);
 
     // maps vertice name (for centauro the point contact frame) to contact index from 0 to 3
     int vertices2ContactIndex(std::vector<std::string> vertices_name);
