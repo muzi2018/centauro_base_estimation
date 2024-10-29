@@ -39,87 +39,87 @@ generate_messages(
 catkin_package()
 
 # compile library
-# add_library(ikbe SHARED
-#     src/base_estimation.cpp
-#     src/vertex_force_optimizer.cpp
-#     src/contact_estimation.cpp)
+add_library(ikbe SHARED
+    src/base_estimation.cpp
+    src/vertex_force_optimizer.cpp
+    src/contact_estimation.cpp)
 
-# add_dependencies(ikbe ${PROJECT_NAME}_generate_messages)
+add_dependencies(ikbe ${PROJECT_NAME}_generate_messages)
 
-# target_link_libraries(ikbe
-#     PUBLIC
-#     ${cartesian_interface_LIBRARIES}
-#     ${catkin_LIBRARIES}
-#     )
+target_link_libraries(ikbe
+    PUBLIC
+    ${cartesian_interface_LIBRARIES}
+    ${catkin_LIBRARIES}
+    )
 
-# install(
-#     TARGETS ikbe
-#     DESTINATION lib
-#     )
+install(
+    TARGETS ikbe
+    DESTINATION lib
+    )
 
 find_package(xbot2 QUIET)
 
 # compile plugin
-# if(${xbot2_FOUND})
+if(${xbot2_FOUND})
 
-#     add_xbot2_plugin(base_estimation src/base_estimation_plugin.cpp src/contact_viz.cpp)
+    add_xbot2_plugin(base_estimation src/base_estimation_plugin.cpp src/contact_viz.cpp)
 
-#     target_link_libraries(base_estimation
-#         PRIVATE
-#         ikbe
-#         xbot2::xbot2_ros_support
-#         )
+    target_link_libraries(base_estimation
+        PRIVATE
+        ikbe
+        xbot2::xbot2_ros_support
+        )
 
-#     install(
-#         TARGETS base_estimation
-#         DESTINATION lib
-#         )
+    install(
+        TARGETS base_estimation
+        DESTINATION lib
+        )
 
-# endif()
+endif()
 
 # compile node
-# add_executable(base_estimation_node src/base_estimation_node.cpp)
+add_executable(base_estimation_node src/base_estimation_node.cpp)
 
-# target_link_libraries(base_estimation_node
-#     PRIVATE
-#     ikbe
-#     xbot2::xbot2
-#     )
+target_link_libraries(base_estimation_node
+    PRIVATE
+    ikbe
+    xbot2::xbot2
+    )
 
-# install(
-#     TARGETS base_estimation_node
-#     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-#     )
+install(
+    TARGETS base_estimation_node
+    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+    )
 
 # compile gazebo tf publisher
-# add_executable(gazebo_tf_publisher src/gazebo_tf_publisher.cpp)
+add_executable(gazebo_tf_publisher src/gazebo_tf_publisher.cpp)
 
-# target_link_libraries(gazebo_tf_publisher
-#     PRIVATE
-#     ${catkin_LIBRARIES}
-#     )
+target_link_libraries(gazebo_tf_publisher
+    PRIVATE
+    ${catkin_LIBRARIES}
+    )
 
-# install(
-#     TARGETS gazebo_tf_publisher
-#     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-#     )
+install(
+    TARGETS gazebo_tf_publisher
+    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+    )
 
 
 # compile cartesio rt
-# if(${COMPILE_CARTESIO_PLUGIN})
-#     add_subdirectory(cartesio)
-# endif()
+if(${COMPILE_CARTESIO_PLUGIN})
+    add_subdirectory(cartesio)
+endif()
 
 # add_subdirectory(bindings/python/)
 
 
 # install files
-# install(
-#     DIRECTORY config
-#     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-#     )
+install(
+    DIRECTORY config
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+    )
 
-# install(
-#     DIRECTORY launch
-#     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-#     )
+install(
+    DIRECTORY launch
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+    )
