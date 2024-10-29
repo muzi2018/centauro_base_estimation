@@ -38,8 +38,9 @@ catkin_package()
 # compile library
 add_library(ikbe SHARED
     src/base_estimation.cpp
-    src/vertex_force_optimizer.cpp
-    src/contact_estimation.cpp)
+    # src/vertex_force_optimizer.cpp
+    # src/contact_estimation.cpp
+    )
 
 target_link_libraries(ikbe
     PUBLIC
