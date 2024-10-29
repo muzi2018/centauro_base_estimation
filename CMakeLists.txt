@@ -13,7 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
     message_generation
     cartesio_acceleration_support
 
-    ocs2_msgs
+    # ocs2_msgs
     )
 
 
@@ -52,50 +52,50 @@ install(
     DESTINATION lib
     )
 
-find_package(xbot2 QUIET)
+# find_package(xbot2 QUIET)
 
-# compile plugin
-if(FALSE)#${xbot2_FOUND})
+# # compile plugin
+# if(FALSE)#${xbot2_FOUND})
 
-    add_xbot2_plugin(base_estimation src/base_estimation_plugin.cpp src/contact_viz.cpp)
+#     add_xbot2_plugin(base_estimation src/base_estimation_plugin.cpp src/contact_viz.cpp)
 
-    target_link_libraries(base_estimation
-        PRIVATE
-        ikbe
-        xbot2::xbot2_ros_support
-        )
+#     target_link_libraries(base_estimation
+#         PRIVATE
+#         ikbe
+#         xbot2::xbot2_ros_support
+#         )
 
-    install(
-        TARGETS base_estimation
-        DESTINATION lib
-        )
+#     install(
+#         TARGETS base_estimation
+#         DESTINATION lib
+#         )
 
-endif()
+# endif()
 
-# compile node
-add_executable(base_estimation_node src/base_estimation_node.cpp)
+# # compile node
+# add_executable(base_estimation_node src/base_estimation_node.cpp)
 
-target_link_libraries(base_estimation_node
-    PRIVATE
-    ikbe
-    xbot2::xbot2
-    )
+# target_link_libraries(base_estimation_node
+#     PRIVATE
+#     ikbe
+#     xbot2::xbot2
+#     )
 
-install(
-    TARGETS base_estimation_node
-    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-    )
+# install(
+#     TARGETS base_estimation_node
+#     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+#     )
 
-# compile cartesio rt
-add_subdirectory(cartesio)
+# # compile cartesio rt
+# add_subdirectory(cartesio)
 
-# install files
-install(
-    DIRECTORY config
-    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-    )
+# # install files
+# install(
+#     DIRECTORY config
+#     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+#     )
 
-install(
-    DIRECTORY launch
-    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-    )
+# install(
+#     DIRECTORY launch
+#     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+#     )
