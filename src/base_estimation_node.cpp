@@ -280,7 +280,7 @@ double BaseEstimationNode::getRate() const
 
 void BaseEstimationNode::start()
 {
-    _robot->sense(false);
+    _robot->sense(true);
     _model->syncFrom(*_robot);
 
     if(_est->imu())
@@ -333,11 +333,14 @@ void BaseEstimationNode::publishToROS(const Eigen::Affine3d& T, const Eigen::Vec
                                       const std::vector<bool>& haptic_contact_flags,
                                       const std::vector<Eigen::Vector6d>& contact_wrenches)
 {
+    // std::cout << "base_pose = " << std::endl << T.translation() << std::endl;
+
     // publish tf
     geometry_msgs::TransformStamped tf = tf2::eigenToTransform(T);
     std::string base_link;
     _model->getFloatingBaseLink(base_link);
     tf.child_frame_id = base_link;
+    // std::cout << "base_link: " << base_link << std::endl;
     tf.header.frame_id = "odometry/world";
     tf.header.stamp = ros::Time::now();
 
