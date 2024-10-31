@@ -333,7 +333,7 @@ void BaseEstimationNode::publishToROS(const Eigen::Affine3d& T, const Eigen::Vec
                                       const std::vector<bool>& haptic_contact_flags,
                                       const std::vector<Eigen::Vector6d>& contact_wrenches)
 {
-    // std::cout << "base_pose = " << std::endl << T.translation() << std::endl;
+    std::cout << "base_pose = " << std::endl << T.translation() << std::endl;
 
     // publish tf
     geometry_msgs::TransformStamped tf = tf2::eigenToTransform(T);
