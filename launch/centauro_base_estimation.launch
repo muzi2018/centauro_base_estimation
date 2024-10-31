@@ -8,6 +8,19 @@
     <arg name="launch-prefix"      default=""/>
     <arg name="arm_contacts"       default="true"/>
 
+    <arg name="arms" default="true"/>
+    <arg name="legs" default="true"/>
+    <arg name="velodyne" default="false"/>
+    <arg name="realsense" default="false"/>
+    <arg name="end_effector_left" default="ball"/>
+    <arg name="end_effector_right" default="dagana"/>
+    <arg name="battery" default="false"/>
+
+    <param name="/robot_description"
+         command="$(find xacro)/xacro $(find centauro_urdf)/urdf/centauro_robot.urdf.xacro floating_joint:=true battery:=$(arg battery) upper_body:=$(arg arms) legs:=$(arg legs) velodyne:=$(arg velodyne) realsense:=$(arg realsense) end_effector_left:=$(arg end_effector_left) end_effector_right:=$(arg end_effector_right)"/>
+
+    <param name="/robot_description_semantic"
+              command="$(find xacro)/xacro $(find centauro_srdf)/srdf/centauro.srdf.xacro floating_joint:=true upper_body:=$(arg arms) legs:=$(arg legs) velodyne:=$(arg velodyne) realsense:=$(arg realsense) end_effector_left:=$(arg end_effector_left) end_effector_right:=$(arg end_effector_right)"/>
     
     <node pkg="base_estimation" type="base_estimation_node" name="centauro_base_estimation" output="screen" launch-prefix="gnome-terminal --">
         <param name="rate" value="200.0"/>

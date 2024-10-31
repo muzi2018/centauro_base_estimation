@@ -309,21 +309,21 @@ bool BaseEstimationNode::run()
         return false;
     }
 
-    // publish contact markers in ROS
-    // tbd publishVertexWeights();
+    // // publish contact markers in ROS
+    // // tbd publishVertexWeights();
 
-    // contact status and contact wrenches
-    std::vector<Eigen::Vector6d> wrenches(_contacts_number);
-    std::vector<bool> contacts(_contacts_number);
-    std::vector<bool> haptic_contacts(_contacts_number);
-    for (int i = 0; i < contacts.size(); i++) {
-        contacts[i] = _est->contact_info[i].contact_state;
-        haptic_contacts[i] = _est->contact_info[i].contact_haptic_state;
-        wrenches[i] = _est->contact_info[i].wrench;
-    }
+    // // contact status and contact wrenches
+    // std::vector<Eigen::Vector6d> wrenches(_contacts_number);
+    // std::vector<bool> contacts(_contacts_number);
+    // std::vector<bool> haptic_contacts(_contacts_number);
+    // for (int i = 0; i < contacts.size(); i++) {
+    //     contacts[i] = _est->contact_info[i].contact_state;
+    //     haptic_contacts[i] = _est->contact_info[i].contact_haptic_state;
+    //     wrenches[i] = _est->contact_info[i].wrench;
+    // }
 
-    // base state broadcast in ROS
-    publishToROS(base_pose, base_vel, raw_base_vel, contacts, haptic_contacts, wrenches);
+    // // base state broadcast in ROS
+    // publishToROS(base_pose, base_vel, raw_base_vel, contacts, haptic_contacts, wrenches);
 
     return true;
 }
