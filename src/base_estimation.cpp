@@ -133,6 +133,7 @@ void BaseEstimation::addImu(ImuSensor::ConstPtr imu)
 {
     _imu = imu;
     _imu_task = task_as<Cartesian::CartesianTask>(_ci->getTask(imu->getSensorName()));
+    // std::cout << "imu->getSensorName() = " << imu->getSensorName() << std::endl; // imu_link
     _imu_task->setActivationState(Cartesian::ActivationState::Enabled);
 
     // tbd: error check

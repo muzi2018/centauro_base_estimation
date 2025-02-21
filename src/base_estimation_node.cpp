@@ -89,13 +89,14 @@ BaseEstimationNode::BaseEstimationNode():
 
     // load problem
     std::string ik_problem_str;
-    if(!_nhpr.getParam("ik_problem", ik_problem_str))
+    if(!_nhpr.getParam("ik_problem", ik_problem_str)) //**centauro_base_estimation.stack */ 
     {
         throw std::runtime_error("~ik_problem param missing");
     }
 
     auto ik_problem_yaml = YAML::Load(ik_problem_str);
-
+    // std::cout << "ik_problem_yaml = " << ik_problem_yaml << std::endl;
+    
     // estimator options
     ikbe::BaseEstimation::Options est_opt;
     est_opt.dt = 1./_nhpr.param("rate", 100.0);
@@ -116,14 +117,15 @@ BaseEstimationNode::BaseEstimationNode():
     }
     _est = std::make_unique<ikbe::BaseEstimation>(_model, ik_problem_yaml, _nhpr, est_opt);
 
-    // use imu
+    // use imu true
     if(_nhpr.param("use_imu", false))
     {
+        // std::cout << "Using imu." << std::endl;
         if(!_robot->getImu().empty())
         {
             auto imu = _robot->getImu().begin()->second;
             _est->addImu(imu);
-            jinfo("using imu '{}'", imu->getSensorName());
+            jinfo("using imu '{}'", imu->getSensorName()); // [info][base_estimation_node] using imu 'imu_link'
         }
         else
         {
@@ -183,6 +185,8 @@ BaseEstimationNode::BaseEstimationNode():
     {
         auto ft_name = rc.first;
         auto wh_name = rc.second;
+        std::cout << "ft_name: " << ft_name << std::endl;
+        std::cout << "wh_name: " << wh_name << std::endl;
 
         // map of available ft sensors
         auto ft_map = _robot->getForceTorque();
@@ -214,7 +218,9 @@ BaseEstimationNode::BaseEstimationNode():
         {
             // save force-torque name
             auto ft_name = sc.first;
+            // std::cout << "ft_name: " << ft_name << std::endl;
             auto vertex_prefix = sc.second;
+            // std::cout << "vertex_prefix: " << vertex_prefix << std::endl;
 
             // retrieve foot corner frames based on
             // the given prefix
@@ -333,7 +339,7 @@ void BaseEstimationNode::publishToROS(const Eigen::Affine3d& T, const Eigen::Vec
                                       const std::vector<bool>& haptic_contact_flags,
                                       const std::vector<Eigen::Vector6d>& contact_wrenches)
 {
-    std::cout << "base_pose = " << std::endl << T.translation() << std::endl;
+    // std::cout << "base_pose = " << std::endl << T.translation() << std::endl;
 
     // publish tf
     geometry_msgs::TransformStamped tf = tf2::eigenToTransform(T);
